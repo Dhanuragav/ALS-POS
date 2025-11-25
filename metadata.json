@@ -1,0 +1,5 @@
+{
+  "name": "Annalakshmi POS",
+  "description": "A comprehensive, offline-capable Point of Sale system for vegetarian hotels. Features touch-friendly billing, KOT management, thermal printing support, and sales analytics.",
+  "requestFramePermissions": []
+}
