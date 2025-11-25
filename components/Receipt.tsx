@@ -1,23 +1,27 @@
 import React from 'react';
-import { Bill, SettlementData, PaymentMode } from '../types';
+import { Bill, SettlementData, PaymentMode, CartItem } from '../types';
 import { RESTAURANT_NAME, RESTAURANT_ADDRESS, RESTAURANT_PHONE, RESTAURANT_GSTIN } from '../constants';
 
 interface ReceiptProps {
   bill: Bill | null;
+  itemsToPrint?: CartItem[]; // For KOT
   settlementData?: SettlementData | null;
   mode: 'BILL' | 'KOT' | 'SETTLEMENT';
   renderMode?: 'PRINT' | 'CANVAS';
+  tableNumber?: string; // For KOT
+  kotOrderType?: string; // For KOT "Supplementary" vs "New"
 }
 
-const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMode = 'PRINT' }) => {
-  if (mode !== 'SETTLEMENT' && !bill) return null;
+const Receipt: React.FC<ReceiptProps> = ({ bill, itemsToPrint, settlementData, mode, renderMode = 'PRINT', tableNumber, kotOrderType }) => {
+  if (mode === 'BILL' && !bill) return null;
   if (mode === 'SETTLEMENT' && !settlementData) return null;
+  if (mode === 'KOT' && !itemsToPrint) return null;
 
   const now = new Date();
   const printTime = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-  const billDate = bill ? new Date(bill.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-  const billTime = bill ? new Date(bill.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const billDate = bill ? new Date(bill.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : now.toLocaleDateString();
+  const billTime = bill ? new Date(bill.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : now.toLocaleTimeString();
 
   const containerClass = renderMode === 'PRINT' 
     ? "hidden print-only print:block font-mono text-black w-[78mm] mx-auto p-1 leading-tight text-[12px]"
@@ -125,43 +129,35 @@ const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMod
             <div className="w-full border-t border-black my-1"></div>
             
             <div className="flex justify-between w-full max-w-[220px] text-sm font-extrabold">
-                <span>Total:</span>
+                <span>Total Due:</span>
                 <span>{bill.totalAmount.toFixed(2)}</span>
             </div>
           </div>
           
           <Divider />
 
-          {/* Payment Details */}
+          {/* Payment History */}
           <div className="mt-2 text-[11px]">
-              <div className="flex justify-between">
-                <span>Payment Mode:</span>
-                <span className="font-bold uppercase">{bill.paymentMode}</span>
-              </div>
+              <p className="font-bold mb-1">PAYMENT HISTORY</p>
+              {bill.payments && bill.payments.length > 0 ? (
+                  bill.payments.map((p, i) => (
+                      <div key={i} className="flex justify-between">
+                          <span>{new Date(p.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} {p.mode}</span>
+                          <span>{p.amount.toFixed(2)}</span>
+                      </div>
+                  ))
+              ) : (
+                  <div className="flex justify-between">
+                      <span>{bill.paymentMode}</span>
+                      <span>{bill.totalAmount.toFixed(2)}</span>
+                  </div>
+              )}
               
-              {bill.paymentMode === PaymentMode.UPI && bill.paymentDetails?.upiRef && (
-                  <div className="flex justify-between text-xs">
-                    <span>Reference ID:</span>
-                    <span>{bill.paymentDetails.upiRef}</span>
+              {bill.payments && bill.payments.length > 0 && (
+                  <div className="flex justify-between font-bold border-t border-black mt-1 pt-1">
+                      <span>Total Paid:</span>
+                      <span>{bill.payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</span>
                   </div>
-              )}
-              {bill.paymentMode === PaymentMode.CARD && bill.paymentDetails?.cardDigits && (
-                  <div className="flex justify-between text-xs">
-                    <span>Card:</span>
-                    <span>xxxx-{bill.paymentDetails.cardDigits}</span>
-                  </div>
-              )}
-               {bill.paymentMode === PaymentMode.CASH && bill.paymentDetails?.cashTendered && (
-                  <>
-                    <div className="flex justify-between text-xs">
-                        <span>Cash Given:</span>
-                        <span>{bill.paymentDetails.cashTendered.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                        <span>Balance Returned:</span>
-                        <span>{(bill.paymentDetails.cashBalance || 0).toFixed(2)}</span>
-                    </div>
-                  </>
               )}
           </div>
 
@@ -176,23 +172,22 @@ const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMod
       )}
 
       {/* ----------------- KOT FORMAT ----------------- */}
-      {mode === 'KOT' && bill && (
+      {mode === 'KOT' && itemsToPrint && (
         <div className="flex flex-col text-sm font-bold">
            <div className="text-center border-b-2 border-black pb-2 mb-2">
              <h2 className="text-2xl font-extrabold">KOT</h2>
-             <p className="text-xs uppercase">{bill.orderType}</p>
+             <p className="text-xs uppercase">{kotOrderType || 'NEW ORDER'}</p>
            </div>
 
            <div className="flex justify-between text-xs mb-2">
-             <span>Date: {billDate} {billTime}</span>
-             <span>Table: {bill.tableNumber || 'N/A'}</span>
+             <span>Date: {now.toLocaleDateString()} {now.toLocaleTimeString()}</span>
+             <span>Table: {tableNumber || 'N/A'}</span>
            </div>
-           <p className="text-xs mb-2">Bill #: {bill.billNumber}</p>
 
            <Divider />
 
            <div className="flex flex-col gap-2">
-             {bill.items.map((item, idx) => (
+             {itemsToPrint.map((item, idx) => (
                <div key={idx} className="flex flex-col border-b border-dashed border-gray-400 pb-1">
                  <div className="flex justify-between items-center text-lg">
                     <span className="flex-1">{item.shortCode || item.name}</span>
@@ -231,14 +226,16 @@ const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMod
             <div className="flex justify-between"><span>Total Qty Sold:</span><span>{settlementData.totalQty}</span></div>
             <Divider />
             <div className="flex justify-between"><span>Sub Total:</span><span>{settlementData.subTotal.toFixed(2)}</span></div>
+            {settlementData.totalDiscount > 0 && (
+                <div className="flex justify-between"><span>Discount:</span><span>-{settlementData.totalDiscount.toFixed(2)}</span></div>
+            )}
             <div className="flex justify-between"><span>CGST:</span><span>{settlementData.cgst.toFixed(2)}</span></div>
             <div className="flex justify-between"><span>SGST:</span><span>{settlementData.sgst.toFixed(2)}</span></div>
-            <div className="flex justify-between font-bold text-sm mt-1"><span>Grand Total:</span><span>{settlementData.grandTotal.toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold text-sm mt-1"><span>Grand Total Revenue:</span><span>{settlementData.grandTotal.toFixed(2)}</span></div>
             
             <h3 className="font-bold border-b border-black mb-1 mt-3">Payment Breakdown</h3>
             <div className="flex justify-between"><span>Cash Sales:</span><span>{settlementData.cashSales.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span>UPI Sales:</span><span>{settlementData.upiSales.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span>Card Sales:</span><span>{settlementData.cardSales.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span>Credit Sales (Card/UPI):</span><span>{settlementData.creditSales.toFixed(2)}</span></div>
 
             {/* Detailed list if needed (hidden for brevity in receipt, good for audit) */}
             {settlementData.paymentBreakdown.some(p => p.mode !== 'Cash') && (
