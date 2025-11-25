@@ -1,32 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { CartItem, OrderType, PaymentMode, Bill } from '../types';
-import { Trash2, Plus, Minus, Printer, ChefHat, Download, CreditCard, Banknote, Smartphone } from 'lucide-react';
+import { Trash2, Plus, Minus, Printer, ChefHat, Download, CreditCard, Banknote, Smartphone, PenLine, MessageSquare } from 'lucide-react';
 import { CGST_PERCENTAGE, SGST_PERCENTAGE } from '../constants';
 
 interface CartSidebarProps {
   cart: CartItem[];
   lastBill: Bill | null;
   onUpdateQty: (id: string, delta: number) => void;
+  onUpdateNote: (id: string, note: string) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onCheckout: (mode: PaymentMode, type: OrderType, table: string, details: any) => void;
+  onCheckout: (mode: PaymentMode, type: OrderType, table: string, details: any, discountPercent: number) => void;
   onDownloadPdf: () => void;
 }
 
-const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, onRemove, onClear, onCheckout, onDownloadPdf }) => {
+const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, onUpdateNote, onRemove, onClear, onCheckout, onDownloadPdf }) => {
   const [payMode, setPayMode] = useState<PaymentMode>(PaymentMode.CASH);
   const [orderType, setOrderType] = useState<OrderType>(OrderType.DINE_IN);
   const [tableNum, setTableNum] = useState<string>('');
+  const [discountPercent, setDiscountPercent] = useState<string>('');
   
   // Payment Details
   const [upiRef, setUpiRef] = useState('');
   const [cardDigits, setCardDigits] = useState('');
   const [cashTendered, setCashTendered] = useState<string>('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
+  // Calculations
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const cgstAmount = subTotal * CGST_PERCENTAGE;
-  const sgstAmount = subTotal * SGST_PERCENTAGE;
-  const totalAmount = subTotal + cgstAmount + sgstAmount;
+  
+  // Discount logic
+  const discountVal = parseFloat(discountPercent) || 0;
+  const discountAmount = (subTotal * discountVal) / 100;
+  
+  // Tax logic (Tax on discounted amount)
+  const taxableAmount = subTotal - discountAmount;
+  const cgstAmount = taxableAmount * CGST_PERCENTAGE;
+  const sgstAmount = taxableAmount * SGST_PERCENTAGE;
+  const totalAmount = taxableAmount + cgstAmount + sgstAmount;
 
   // Reset inputs when cart clears
   useEffect(() => {
@@ -35,6 +46,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, 
       setCardDigits('');
       setCashTendered('');
       setTableNum('');
+      setDiscountPercent('');
     }
   }, [cart]);
 
@@ -44,7 +56,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, 
       cardDigits,
       cashTendered: cashTendered ? parseFloat(cashTendered) : undefined,
       cashBalance: cashTendered ? parseFloat(cashTendered) - totalAmount : undefined
-    });
+    }, discountVal);
   };
 
   const renderPaymentInputs = () => {
@@ -130,19 +142,48 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, 
           </div>
         ) : (
           cart.map(item => (
-            <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg shadow-sm">
-              <div className="flex-1">
-                <p className="font-medium text-gray-800 text-sm">{item.name}</p>
-                <p className="text-xs text-gray-500">₹{item.price} x {item.quantity}</p>
+            <div key={item.id} className="flex flex-col p-3 bg-white border border-gray-100 rounded-lg shadow-sm group">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex-1">
+                    <p className="font-medium text-gray-800 text-sm">{item.name}</p>
+                    <p className="text-xs text-gray-500">₹{item.price} x {item.quantity}</p>
+                </div>
+                <div className="text-right">
+                    <p className="font-bold text-gray-800 text-sm">₹{item.price * item.quantity}</p>
+                </div>
               </div>
-              <div className="flex items-center space-x-3">
+              
+              <div className="flex justify-between items-center">
+                 {/* Notes Input Toggle */}
+                 <div className="flex-1 mr-2">
+                    {editingNoteId === item.id ? (
+                        <div className="flex items-center">
+                            <input 
+                                autoFocus
+                                type="text" 
+                                value={item.notes || ''} 
+                                onChange={(e) => onUpdateNote(item.id, e.target.value)}
+                                onBlur={() => setEditingNoteId(null)}
+                                onKeyDown={(e) => e.key === 'Enter' && setEditingNoteId(null)}
+                                placeholder="Add note..."
+                                className="w-full text-xs border-b border-emerald-500 outline-none pb-1 text-gray-600"
+                            />
+                        </div>
+                    ) : (
+                        <button 
+                            onClick={() => setEditingNoteId(item.id)}
+                            className="flex items-center text-[10px] text-gray-400 hover:text-emerald-600 transition-colors"
+                        >
+                            <MessageSquare size={12} className="mr-1" />
+                            {item.notes ? <span className="text-emerald-600 truncate max-w-[120px]">{item.notes}</span> : "Add Note"}
+                        </button>
+                    )}
+                 </div>
+
                  <div className="flex items-center bg-gray-100 rounded-lg">
                     <button onClick={() => onUpdateQty(item.id, -1)} className="p-1 hover:bg-gray-200 rounded-l-lg text-gray-600"><Minus size={14}/></button>
                     <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
                     <button onClick={() => onUpdateQty(item.id, 1)} className="p-1 hover:bg-gray-200 rounded-r-lg text-gray-600"><Plus size={14}/></button>
-                 </div>
-                 <div className="text-right w-16">
-                    <p className="font-bold text-gray-800 text-sm">₹{item.price * item.quantity}</p>
                  </div>
               </div>
             </div>
@@ -161,17 +202,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, 
                 <option value={OrderType.DINE_IN}>Dine-In</option>
                 <option value={OrderType.TAKEAWAY}>Takeaway</option>
             </select>
-            {orderType === OrderType.DINE_IN && (
-                <input 
-                    type="text" 
-                    placeholder="Table No" 
-                    value={tableNum}
-                    onChange={(e) => setTableNum(e.target.value)}
-                    className="w-full p-2 text-sm border border-gray-300 rounded-lg"
-                />
-            )}
+            <div className="relative">
+                {orderType === OrderType.DINE_IN && (
+                    <input 
+                        type="text" 
+                        placeholder="Table No" 
+                        value={tableNum}
+                        onChange={(e) => setTableNum(e.target.value)}
+                        className="w-full p-2 text-sm border border-gray-300 rounded-lg"
+                    />
+                )}
+            </div>
          </div>
          
+         {/* Discount Field */}
+         <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-2">
+            <span className="text-xs font-semibold text-gray-600 ml-1">Discount %</span>
+            <input 
+                type="number"
+                placeholder="0"
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                className="w-16 text-right text-sm font-bold outline-none border-b border-gray-300 focus:border-emerald-500"
+            />
+         </div>
+
          {/* Payment Modes */}
          <div className="flex bg-gray-200 p-1 rounded-lg">
             <button 
@@ -205,6 +260,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ cart, lastBill, onUpdateQty, 
                 <span>Subtotal</span>
                 <span>₹{subTotal.toFixed(2)}</span>
             </div>
+            {discountVal > 0 && (
+                <div className="flex justify-between text-emerald-600 text-xs font-medium">
+                    <span>Discount ({discountVal}%)</span>
+                    <span>-₹{discountAmount.toFixed(2)}</span>
+                </div>
+            )}
             <div className="flex justify-between text-gray-500 text-xs">
                 <span>CGST (2.5%)</span>
                 <span>₹{cgstAmount.toFixed(2)}</span>

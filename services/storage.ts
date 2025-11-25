@@ -35,9 +35,15 @@ export const getMenu = (): MenuItem[] => {
   return data ? JSON.parse(data) : SEED_MENU;
 };
 
+export const saveMenu = (items: MenuItem[]) => {
+  localStorage.setItem(KEYS.MENU, JSON.stringify(items));
+};
+
 export const getBills = (): Bill[] => {
   const data = localStorage.getItem(KEYS.BILLS);
-  return data ? JSON.parse(data) : [];
+  const bills = data ? JSON.parse(data) : [];
+  // Sort by timestamp desc
+  return bills.sort((a: Bill, b: Bill) => b.timestamp - a.timestamp);
 };
 
 export const getSettlements = (): SettlementData[] => {
@@ -51,10 +57,6 @@ export const getCurrentSession = (): SessionType => {
   if (hour >= 6 && hour < 15) {
     return SessionType.LUNCH;
   }
-  // Dinner Session: 3:00 PM to 12:00 AM (15:00 - 00:00)
-  // Also technically covers 12 AM to 6 AM as part of "Dinner" shift for late night, 
-  // but simpler logic here assumes standard operating hours.
-  // If we want exact overlap, we just say else = Dinner.
   return SessionType.DINNER;
 };
 
@@ -67,7 +69,8 @@ export const saveBill = (
   paymentMode: PaymentMode, 
   orderType: any, 
   tableNumber?: string,
-  paymentDetails?: PaymentDetails
+  paymentDetails?: PaymentDetails,
+  discount: number = 0
 ): Bill => {
   
   const session = getCurrentSession();
@@ -87,6 +90,7 @@ export const saveBill = (
     session,
     items,
     subTotal,
+    discount,
     cgst,
     sgst,
     totalAmount: total,
@@ -96,23 +100,22 @@ export const saveBill = (
     tableNumber,
   };
 
-  const bills = getBills();
+  // Get raw bills array (not sorted) to push
+  const data = localStorage.getItem(KEYS.BILLS);
+  const bills = data ? JSON.parse(data) : [];
   bills.push(newBill);
   localStorage.setItem(KEYS.BILLS, JSON.stringify(bills));
   return newBill;
 };
 
 export const getSettlementReport = (actualCash: number): SettlementData => {
-  const bills = getBills();
+  const bills = getBills(); // Already gets from LS
   const settlements = getSettlements();
   
-  // Find last settlement time to know where to start
-  // If no settlements, start from beginning of time (or 24h ago)
   const lastSettlementTime = settlements.length > 0 
     ? Math.max(...settlements.map(s => s.endTime)) 
     : 0;
 
-  // Filter bills that are newer than last settlement
   const pendingBills = bills.filter(b => b.timestamp > lastSettlementTime);
 
   const session = getCurrentSession();
@@ -182,8 +185,6 @@ export const saveSettlement = (data: SettlementData) => {
     localStorage.setItem(KEYS.SETTLEMENTS, JSON.stringify(settlements));
 };
 
-// --- EXPORT FUNCTIONS ---
-
 export const exportBillsToCSV = () => {
     const bills = getBills();
     if(bills.length === 0) {
@@ -192,7 +193,7 @@ export const exportBillsToCSV = () => {
     }
 
     // CSV Header
-    let csvContent = "Bill ID,Session,Date,Time,Table,Order Type,Payment Mode,SubTotal,CGST,SGST,Total,Ref/Details\n";
+    let csvContent = "Bill ID,Session,Date,Time,Table,Order Type,Payment Mode,SubTotal,Discount,CGST,SGST,Total,Ref/Details\n";
 
     bills.forEach(b => {
         const date = new Date(b.timestamp).toLocaleDateString();
@@ -211,6 +212,7 @@ export const exportBillsToCSV = () => {
             b.orderType,
             b.paymentMode,
             b.subTotal.toFixed(2),
+            (b.discount || 0).toFixed(2),
             b.cgst.toFixed(2),
             b.sgst.toFixed(2),
             b.totalAmount.toFixed(2),
@@ -224,26 +226,6 @@ export const exportBillsToCSV = () => {
 };
 
 export const exportPDFsAsZip = async (generatePDFCallback: (bill: Bill) => Promise<Blob | null>) => {
-    const bills = getBills();
-    // Filter for today's bills only to keep zip manageable
-    const today = new Date().toDateString();
-    const todaysBills = bills.filter(b => new Date(b.timestamp).toDateString() === today);
-
-    if(todaysBills.length === 0) {
-        alert("No bills from today to export.");
-        return;
-    }
-
-    const zip = new JSZip();
-    const folder = zip.folder(`Bills_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
-
-    // We need to render each bill one by one to a canvas/pdf. 
-    // This is tricky in a pure logic file. 
-    // Instead, we will rely on the App.tsx to pass a rendering loop or handle this UI side.
-    // BUT, for this function, let's assume we return the data needed for the UI to loop.
-    
-    // Actually, the prompt asks for logic here. 
-    // Since html2canvas needs DOM, we can't do it purely here.
-    // We will just return the list of bills to the UI to handle the "Render -> Zip" loop.
-    return todaysBills;
+    // Logic remains handled by UI for zip generation in this simple app
+    return getBills();
 };

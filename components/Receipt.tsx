@@ -6,23 +6,19 @@ interface ReceiptProps {
   bill: Bill | null;
   settlementData?: SettlementData | null;
   mode: 'BILL' | 'KOT' | 'SETTLEMENT';
-  renderMode?: 'PRINT' | 'CANVAS'; // PRINT uses @media print, CANVAS uses fixed styles for PDF gen
+  renderMode?: 'PRINT' | 'CANVAS';
 }
 
 const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMode = 'PRINT' }) => {
-  // If not in settlement mode, we need a bill
   if (mode !== 'SETTLEMENT' && !bill) return null;
   if (mode === 'SETTLEMENT' && !settlementData) return null;
 
   const now = new Date();
   const printTime = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-  // Bill Data helper
   const billDate = bill ? new Date(bill.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
   const billTime = bill ? new Date(bill.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-  // Styles based on render mode
-  // 80mm ~ 300px roughly. 
   const containerClass = renderMode === 'PRINT' 
     ? "hidden print-only print:block font-mono text-black w-[78mm] mx-auto p-1 leading-tight text-[12px]"
     : "block font-mono text-black w-[370px] bg-white p-4 leading-tight text-[12px]";
@@ -109,6 +105,14 @@ const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMod
                 <span>Sub Total:</span>
                 <span>{bill.subTotal.toFixed(2)}</span>
             </div>
+            
+            {bill.discount > 0 && (
+                <div className="flex justify-between w-full max-w-[220px]">
+                    <span>Discount:</span>
+                    <span>-{bill.discount.toFixed(2)}</span>
+                </div>
+            )}
+
             <div className="flex justify-between w-full max-w-[220px]">
                 <span>CGST @ 2.5%:</span>
                 <span>{bill.cgst.toFixed(2)}</span>
@@ -189,11 +193,16 @@ const Receipt: React.FC<ReceiptProps> = ({ bill, settlementData, mode, renderMod
 
            <div className="flex flex-col gap-2">
              {bill.items.map((item, idx) => (
-               <div key={idx} className="flex justify-between items-center text-lg">
-                 <span className="flex-1">{item.shortCode || item.name}</span>
-                 <span className="font-extrabold text-xl ml-2 border border-black px-2 rounded-md min-w-[40px] text-center">
-                    {item.quantity}
-                 </span>
+               <div key={idx} className="flex flex-col border-b border-dashed border-gray-400 pb-1">
+                 <div className="flex justify-between items-center text-lg">
+                    <span className="flex-1">{item.shortCode || item.name}</span>
+                    <span className="font-extrabold text-xl ml-2 border border-black px-2 rounded-md min-w-[40px] text-center">
+                        {item.quantity}
+                    </span>
+                 </div>
+                 {item.notes && (
+                    <span className="text-xs font-normal italic">** {item.notes} **</span>
+                 )}
                </div>
              ))}
            </div>

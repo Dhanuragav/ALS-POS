@@ -5,8 +5,10 @@ import * as db from './services/storage';
 import MenuGrid from './components/MenuGrid';
 import CartSidebar from './components/CartSidebar';
 import Reports from './components/Reports';
+import Settings from './components/Settings';
+import Transactions from './components/Transactions';
 import Receipt from './components/Receipt';
-import { LayoutDashboard, Store, ClipboardCheck, Power } from 'lucide-react';
+import { LayoutDashboard, Store, ClipboardCheck, Power, Settings as SettingsIcon, History } from 'lucide-react';
 
 const App: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -44,19 +46,27 @@ const App: React.FC = () => {
     }).filter(i => i.quantity > 0));
   };
 
+  const updateNote = (id: string, note: string) => {
+      setCart(prev => prev.map(item => item.id === id ? { ...item, notes: note } : item));
+  };
+
   const removeFromCart = (id: string) => {
     setCart(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleCheckout = async (mode: PaymentMode, type: OrderType, table: string, details: any) => {
+  const handleCheckout = async (mode: PaymentMode, type: OrderType, table: string, details: any, discountVal: number) => {
     if (cart.length === 0) return;
 
     const subTotal = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-    const cgst = subTotal * CGST_PERCENTAGE;
-    const sgst = subTotal * SGST_PERCENTAGE;
-    const total = subTotal + cgst + sgst;
+    // Discount Calculation
+    const discountAmount = (subTotal * discountVal) / 100;
+    const taxableAmount = subTotal - discountAmount;
+    
+    const cgst = taxableAmount * CGST_PERCENTAGE;
+    const sgst = taxableAmount * SGST_PERCENTAGE;
+    const total = taxableAmount + cgst + sgst;
 
-    const bill = db.saveBill(cart, total, subTotal, cgst, sgst, mode, type, table, details);
+    const bill = db.saveBill(cart, total, subTotal, cgst, sgst, mode, type, table, details, discountAmount);
     setLastBill(bill);
     setCart([]); // Clear cart
     
@@ -78,6 +88,15 @@ const App: React.FC = () => {
             }, 100);
         }, 500);
     }, 100);
+  };
+
+  const handleReprint = (bill: Bill) => {
+      setLastBill(bill);
+      setRenderMode('PRINT');
+      setPrintMode('BILL');
+      setTimeout(() => {
+          window.print();
+      }, 200);
   };
 
   const generatePDF = async (elementId: string, filename: string) => {
@@ -157,11 +176,25 @@ const App: React.FC = () => {
                 <Store size={24} />
             </button>
             <button 
+                onClick={() => setView('TRANSACTIONS')}
+                className={`p-3 rounded-xl transition-all ${view === 'TRANSACTIONS' ? 'bg-emerald-700 text-white shadow-lg' : 'hover:bg-emerald-800/50 text-emerald-300'}`}
+                title="Transactions"
+            >
+                <History size={24} />
+            </button>
+            <button 
                 onClick={() => setView('REPORTS')}
                 className={`p-3 rounded-xl transition-all ${view === 'REPORTS' ? 'bg-emerald-700 text-white shadow-lg' : 'hover:bg-emerald-800/50 text-emerald-300'}`}
-                title="Analytics"
+                title="Reports"
             >
                 <LayoutDashboard size={24} />
+            </button>
+            <button 
+                onClick={() => setView('SETTINGS')}
+                className={`p-3 rounded-xl transition-all ${view === 'SETTINGS' ? 'bg-emerald-700 text-white shadow-lg' : 'hover:bg-emerald-800/50 text-emerald-300'}`}
+                title="Settings"
+            >
+                <SettingsIcon size={24} />
             </button>
         </nav>
 
@@ -179,7 +212,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
-        {view === 'POS' ? (
+        {view === 'POS' && (
             <>
                 <div className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col">
                     <header className="mb-4 flex justify-between items-center">
@@ -205,15 +238,30 @@ const App: React.FC = () => {
                     cart={cart}
                     lastBill={lastBill}
                     onUpdateQty={updateQty}
+                    onUpdateNote={updateNote}
                     onRemove={removeFromCart}
                     onClear={() => setCart([])}
                     onCheckout={handleCheckout}
                     onDownloadPdf={handleDownloadLastBillPDF}
                 />
             </>
-        ) : (
+        )}
+        
+        {view === 'REPORTS' && (
             <div className="w-full h-full overflow-hidden">
                 <Reports />
+            </div>
+        )}
+
+        {view === 'SETTINGS' && (
+            <div className="w-full h-full overflow-hidden">
+                <Settings menuItems={menuItems} onUpdateMenu={setMenuItems} />
+            </div>
+        )}
+
+        {view === 'TRANSACTIONS' && (
+            <div className="w-full h-full overflow-hidden">
+                <Transactions onReprint={handleReprint} />
             </div>
         )}
       </div>

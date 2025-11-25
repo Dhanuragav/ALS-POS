@@ -23,6 +23,7 @@ export interface MenuItem {
 
 export interface CartItem extends MenuItem {
   quantity: number;
+  notes?: string;
 }
 
 export enum PaymentMode {
@@ -56,6 +57,7 @@ export interface Bill {
   session: SessionType;
   items: CartItem[];
   subTotal: number;
+  discount: number; // New field
   cgst: number;
   sgst: number;
   totalAmount: number;
@@ -101,4 +103,4 @@ export interface SalesSummary {
   date: string;
 }
 
-export type ViewMode = 'POS' | 'REPORTS' | 'SETTINGS';
+export type ViewMode = 'POS' | 'REPORTS' | 'SETTINGS' | 'TRANSACTIONS';
